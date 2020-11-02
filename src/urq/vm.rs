@@ -5,6 +5,56 @@
 use std::collections::LinkedList;
 use std::mem::size_of;
 
+enum Val {
+    Uint8(u8),
+    Uint16(u16),
+}
+
+trait Value {
+    fn uint8(&self) -> u8;
+    fn uint16(&self) -> u16;
+}
+
+impl Value for u8 {
+    fn uint8(&self) -> u8 {
+        *self
+    }
+
+    fn uint16(&self) -> u16 {
+        *self as u16
+    }
+}
+
+impl Value for u16 {
+    fn uint8(&self) -> u8 {
+        *self as u8
+    }
+
+    fn uint16(&self) -> u16 {
+        *self
+    }
+}
+
+impl Value for Reg {
+    fn uint8(&self) -> u8 {
+        *self as u8
+    }
+
+    fn uint16(&self) -> u16 {
+        *self as u16
+    }
+}
+
+impl Value for Instr {
+    fn uint8(&self) -> u8 {
+        *self as u8
+    }
+
+    fn uint16(&self) -> u16 {
+        *self as u16
+    }
+}
+
 enum Result {
     Ok,
     Error(String),
@@ -12,11 +62,12 @@ enum Result {
 }
 
 trait Device {
-    fn write(&mut self, addr: usize, val: u8) -> u8;
+    fn write<T: Value>(&mut self, addr: usize, val: T) -> u8;
     fn write16(&mut self, addr: usize, val: u16) -> u8;
     fn read(&self, addr: usize) -> u8;
     fn read16(&self, addr: usize) -> u16;
     fn size(&self) -> usize;
+    fn print(&self, addr: usize, n: usize);
 }
 
 struct Mem {
@@ -34,8 +85,8 @@ impl Mem {
 }
 
 impl Device for Mem {
-    fn write(&mut self, addr: usize, val: u8) -> u8 {
-        self.mem[addr] = val;
+    fn write<T: Value>(&mut self, addr: usize, val: T) -> u8 {
+        self.mem[addr] = val.uint8();
 
         return 1;
     }
@@ -59,6 +110,15 @@ impl Device for Mem {
 
     fn size(&self) -> usize {
         self.size
+    }
+
+    fn print(&self, addr: usize, n: usize) {
+        println!("########################## MEM ####################################");
+        print!("MEM {:#04x}: ", addr);
+        for i in 0..n+1 {
+            print!("{:#02x} ", self.mem[addr+i]);
+        }
+        println!("###################################################################");
     }
 }
 
@@ -110,7 +170,7 @@ impl<T> Device for Mapper<T>
 where
     T: Device
 {
-    fn write(&mut self, addr: usize, val: u8) -> u8 {
+    fn write<V: Value>(&mut self, addr: usize, val: V) -> u8 {
         let result = self.find(addr);
 
         match result {
@@ -193,8 +253,29 @@ where
     fn size(&self) -> usize {
         0
     }
+
+    fn print(&self, addr: usize, n: usize) {
+        let result = self.find(addr);
+
+        match result {
+            Ok(region) => {
+                let mut actual_addr = addr;
+
+                if region.remap {
+                    actual_addr = addr - region.start;
+                }
+
+                return unsafe { (*region.device).print(actual_addr, n) };
+            },
+
+            Err(msg) => {
+                panic!(msg)
+            }
+        }
+    }
 }
 
+#[derive(Copy, Clone)]
 enum Instr {
     Unknown,
 
@@ -309,6 +390,7 @@ impl From<u8> for Instr {
     }
 }
 
+#[derive(Copy, Clone)]
 enum Reg {
     R1  = 0x0,
     R2  = 0x1,
@@ -916,7 +998,7 @@ where
 #[test]
 fn mem_write() {
     let mut mem = Mem::new(1024);
-    mem.write(0, 3);
+    mem.write(0, 3 as u8);
     assert_eq!(3, mem.read(0));
     assert_ne!(5, mem.read(0));
 }
@@ -932,8 +1014,8 @@ fn mem_write16() {
 #[test]
 fn mem_hex() {
     let mut mem = Mem::new(1024);
-    mem.write(0, 0x34);
-    mem.write(1, 0x12);
+    mem.write(0, 0x34 as u8);
+    mem.write(1, 0x12 as u8);
     assert_eq!(0x1234, mem.read16(0));
 }
 
@@ -959,53 +1041,51 @@ fn vm_test() {
 
     // =============================== PROGRAMM ===================================
 
-    pc += vm.device.write(pc, Instr::PSH_IMM as u8) as usize;
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
     pc += vm.device.write16(pc, 0x3333) as usize;
 
-    pc += vm.device.write(pc, Instr::PSH_IMM as u8) as usize;
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
     pc += vm.device.write16(pc, 0x2222) as usize;
 
-    pc += vm.device.write(pc, Instr::PSH_IMM as u8) as usize;
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
     pc += vm.device.write16(pc, 0x1111) as usize;
 
-    pc += vm.device.write(pc, Instr::MOV_IMM_REG as u8) as usize;
+    pc += vm.device.write(pc, Instr::MOV_IMM_REG) as usize;
     pc += vm.device.write16(pc, 0x1234) as usize;
-    pc += vm.device.write(pc, Reg::R1 as u8) as usize;
+    pc += vm.device.write(pc, Reg::R1) as usize;
 
-    pc += vm.device.write(pc, Instr::MOV_IMM_REG as u8) as usize;
+    pc += vm.device.write(pc, Instr::MOV_IMM_REG) as usize;
     pc += vm.device.write16(pc, 0x5678) as usize;
-    pc += vm.device.write(pc, Reg::R4 as u8) as usize;
+    pc += vm.device.write(pc, Reg::R4) as usize;
 
-    pc += vm.device.write(pc, Instr::PSH_IMM as u8) as usize;
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
     pc += vm.device.write16(pc, 0x0000) as usize;
 
-    pc += vm.device.write(pc, Instr::CAL_IMM as u8) as usize;
+    pc += vm.device.write(pc, Instr::CAL_IMM) as usize;
     pc += vm.device.write16(pc, subroutine_address) as usize;
 
-    pc += vm.device.write(pc, Instr::PSH_IMM as u8) as usize;
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
     vm.device.write16(pc, 0x4444);
 
     pc = subroutine_address as usize;
 
-    pc += vm.device.write(pc, Instr::PSH_IMM as u8) as usize;
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
     pc += vm.device.write16(pc, 0x0102) as usize;
 
-    pc += vm.device.write(pc, Instr::PSH_IMM as u8) as usize;
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
     pc += vm.device.write16(pc, 0x0304) as usize;
 
-    pc += vm.device.write(pc, Instr::PSH_IMM as u8) as usize;
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
     pc += vm.device.write16(pc, 0x0506) as usize;
 
-    pc += vm.device.write(pc, Instr::MOV_IMM_REG as u8) as usize;
+    pc += vm.device.write(pc, Instr::MOV_IMM_REG) as usize;
     pc += vm.device.write16(pc, 0x0708) as usize;
-    pc += vm.device.write(pc, Reg::R1 as u8) as usize;
+    pc += vm.device.write(pc, Reg::R1) as usize;
 
-    pc += vm.device.write(pc, Instr::MOV_IMM_REG as u8) as usize;
+    pc += vm.device.write(pc, Instr::MOV_IMM_REG) as usize;
     pc += vm.device.write16(pc, 0x090A) as usize;
-    pc += vm.device.write(pc, Reg::R8 as u8) as usize;
+    pc += vm.device.write(pc, Reg::R8) as usize;
 
-    vm.device.write(pc, Instr::RET as u8);
+    vm.device.write(pc, Instr::RET);
     // ============================================================================
-
-    vm.step();
 }
