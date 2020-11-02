@@ -389,7 +389,6 @@ where
     pub fn fetch16(&mut self) -> u16 {
         let result = self.device.read16(self.pc);
         self.pc += 2;
-        self.stack_frame_size -= 2;
 
         result
     }
@@ -398,6 +397,12 @@ where
         self.device.write16(self.sp, val);
         self.sp -= 2;
         self.stack_frame_size += 2;
+    }
+
+    pub fn pop(&mut self) -> u16 {
+        self.sp += 2;
+        self.stack_frame_size -= 2;
+        self.device.read16(self.sp)
     }
 
     pub fn push_state(&mut self) {
@@ -445,11 +450,6 @@ where
         }
 
         self.fp = self.fp + stack_frame_size;
-    }
-
-    pub fn pop(&mut self) -> u16 {
-        self.sp += 2;
-        self.device.read16(self.sp)
     }
 
     pub fn exec(&mut self, instr: Instr) -> Result {
@@ -951,7 +951,7 @@ fn reg_test() {
 
 #[test]
 fn vm_test() {
-    let mem = Mem::new(1024);
+    let mem = Mem::new(256*256);
     let mut vm = Vm::new(mem);
 
     let mut pc = 0;
