@@ -30,6 +30,16 @@ impl Value for u16 {
     }
 }
 
+impl Value for i32 {
+    fn uint8(&self) -> u8 {
+        (*self & 0xff) as u8
+    }
+
+    fn uint16(&self) -> u16 {
+        (*self & 0xffff) as u16
+    }
+}
+
 impl Value for Reg {
     fn uint8(&self) -> u8 {
         *self as u8
@@ -57,8 +67,8 @@ enum Result {
 }
 
 trait Device {
-    fn write<T: Value>(&mut self, addr: usize, val: T) -> u8;
-    fn write16(&mut self, addr: usize, val: u16) -> u8;
+    fn write<T: Value>(&mut self, addr: usize, val: T)   -> u8;
+    fn write16<T: Value>(&mut self, addr: usize, val: T) -> u8;
     fn read(&self, addr: usize) -> u8;
     fn read16(&self, addr: usize) -> u16;
     fn size(&self) -> usize;
@@ -86,9 +96,9 @@ impl Device for Mem {
         return 1;
     }
 
-    fn write16(&mut self, addr: usize, val: u16) -> u8 {
-        self.mem[addr]   = val as u8;
-        self.mem[addr+1] = (val >> 8) as u8;
+    fn write16<T: Value>(&mut self, addr: usize, val: T) -> u8 {
+        self.mem[addr]   = val.uint16() as u8;
+        self.mem[addr+1] = (val.uint16() >> 8) as u8;
 
         return 2;
     }
@@ -185,7 +195,7 @@ where
         }
     }
 
-    fn write16(&mut self, addr: usize, val: u16) -> u8 {
+    fn write16<V: Value>(&mut self, addr: usize, val: V) -> u8 {
         let result = self.find(addr);
 
         match result {
@@ -443,12 +453,12 @@ where
         }
     }
 
-    pub fn read_reg(&self, reg: u8) -> u16 {
-        self.regs[reg as usize]
+    pub fn read_reg<V: Value>(&self, reg: V) -> u16 {
+        self.regs[reg.uint8() as usize]
     }
 
-    pub fn write_reg(&mut self, reg: u8, val: u16) {
-        self.regs[reg as usize] = val;
+    pub fn write_reg<V: Value, W: Value>(&mut self, reg: V, val: W) {
+        self.regs[reg.uint8() as usize] = val.uint16();
     }
 
     pub fn step(&mut self) -> Result {
@@ -1004,7 +1014,7 @@ where
 #[test]
 fn mem_write() {
     let mut mem = Mem::new(1024);
-    mem.write(0, 3 as u8);
+    mem.write(0, 3);
     assert_eq!(3, mem.read(0));
     assert_ne!(5, mem.read(0));
 }
@@ -1020,8 +1030,8 @@ fn mem_write16() {
 #[test]
 fn mem_hex() {
     let mut mem = Mem::new(1024);
-    mem.write(0, 0x34 as u8);
-    mem.write(1, 0x12 as u8);
+    mem.write(0, 0x34);
+    mem.write(1, 0x12);
     assert_eq!(0x1234, mem.read16(0));
 }
 
@@ -1030,10 +1040,10 @@ fn reg_test() {
     let mem = Mem::new(1024);
     let mut vm = Vm::new(mem);
 
-    vm.write_reg(Reg::R1 as u8, 1024);
+    vm.write_reg(Reg::R1, 1024);
     assert_eq!(1024, vm.read_reg(Reg::R1 as u8));
 
-    vm.write_reg(Reg::R8 as u8, 2048);
+    vm.write_reg(Reg::R8, 2048);
     assert_eq!(2048, vm.read_reg(Reg::R8 as u8));
 }
 
