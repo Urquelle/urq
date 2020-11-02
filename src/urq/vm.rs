@@ -5,11 +5,6 @@
 use std::collections::LinkedList;
 use std::mem::size_of;
 
-enum Val {
-    Uint8(u8),
-    Uint16(u16),
-}
-
 trait Value {
     fn uint8(&self) -> u8;
     fn uint16(&self) -> u16;
@@ -456,9 +451,10 @@ where
         self.regs[reg as usize] = val;
     }
 
-    pub fn step(&mut self) {
+    pub fn step(&mut self) -> Result {
         let instr = Instr::from(self.fetch());
-        self.exec(instr);
+
+        self.exec(instr)
     }
 
     pub fn fetch(&mut self) -> u8 {
@@ -989,8 +985,18 @@ where
             },
 
             _ => {
-                panic!("Unbekannte Anweisung");
+                Result::Error(String::from("Unbekannte Anweisung"))
             },
+        }
+    }
+
+    pub fn run(&mut self) {
+        loop {
+            match self.step() {
+                Result::Ok         => (),
+                Result::Halt       => break,
+                Result::Error(msg) => panic!(msg),
+            }
         }
     }
 }
