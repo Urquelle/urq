@@ -72,7 +72,7 @@ trait Device {
     fn read(&self, addr: usize) -> u8;
     fn read16(&self, addr: usize) -> u16;
     fn size(&self) -> usize;
-    fn print(&self, addr: usize, n: usize);
+    fn print(&self, addr: usize, label: &str, n: usize);
 }
 
 struct Mem {
@@ -117,13 +117,13 @@ impl Device for Mem {
         self.size
     }
 
-    fn print(&self, addr: usize, n: usize) {
-        println!("########################## MEM ####################################");
-        print!("MEM {:#04x}: ", addr);
-        for i in 0..n+1 {
-            print!("{:#02x} ", self.mem[addr+i]);
+    fn print(&self, addr: usize, label: &str, n: usize) {
+        println!("########################## {} ####################################", label);
+        print!("MEM 0x{:04x}: ", addr);
+        for i in 0..n {
+            print!("0x{:02x} ", self.mem[addr+i]);
         }
-        println!("###################################################################");
+        println!("\n###################################################################");
     }
 }
 
@@ -259,7 +259,7 @@ where
         0
     }
 
-    fn print(&self, addr: usize, n: usize) {
+    fn print(&self, addr: usize, label: &str, n: usize) {
         let result = self.find(addr);
 
         match result {
@@ -270,7 +270,7 @@ where
                     actual_addr = addr - region.start;
                 }
 
-                return unsafe { (*region.device).print(actual_addr, n) };
+                return unsafe { (*region.device).print(actual_addr, label, n) };
             },
 
             Err(msg) => {
@@ -460,11 +460,29 @@ where
     pub fn write_reg<V: Value, W: Value>(&mut self, reg: V, val: W) {
         self.regs[reg.uint8() as usize] = val.uint16();
     }
+    
+    pub fn print_regs(&self) {
+        println!("########################## REGS ####################################");
+        for i in 0..9 {
+            print!("R{}: {:#06x} ", i+1, self.regs[i]);
+        }
+        println!("\n####################################################################");
+    }
 
     pub fn step(&mut self) -> Result {
         let instr = Instr::from(self.fetch());
 
         self.exec(instr)
+    }
+    
+    pub fn run(&mut self) {
+        loop {
+            match self.step() {
+                Result::Ok         => (),
+                Result::Halt       => break,
+                Result::Error(msg) => panic!(msg),
+            }
+        }
     }
 
     pub fn fetch(&mut self) -> u8 {
@@ -494,14 +512,14 @@ where
     }
 
     pub fn push_state(&mut self) {
-        self.push(self.read_reg(Reg::R1 as u8));
-        self.push(self.read_reg(Reg::R2 as u8));
-        self.push(self.read_reg(Reg::R3 as u8));
-        self.push(self.read_reg(Reg::R4 as u8));
-        self.push(self.read_reg(Reg::R5 as u8));
-        self.push(self.read_reg(Reg::R6 as u8));
-        self.push(self.read_reg(Reg::R7 as u8));
-        self.push(self.read_reg(Reg::R8 as u8));
+        self.push(self.read_reg(Reg::R1));
+        self.push(self.read_reg(Reg::R2));
+        self.push(self.read_reg(Reg::R3));
+        self.push(self.read_reg(Reg::R4));
+        self.push(self.read_reg(Reg::R5));
+        self.push(self.read_reg(Reg::R6));
+        self.push(self.read_reg(Reg::R7));
+        self.push(self.read_reg(Reg::R8));
         self.push(self.pc as u16);
         self.push(self.stack_frame_size as u16 + 2);
 
@@ -516,21 +534,21 @@ where
 
         self.pc = self.pop() as usize;
         let mut val = self.pop();
-        self.write_reg(Reg::R8 as u8, val);
+        self.write_reg(Reg::R8, val);
         val = self.pop();
-        self.write_reg(Reg::R7 as u8, val);
+        self.write_reg(Reg::R7, val);
         val = self.pop();
-        self.write_reg(Reg::R6 as u8, val);
+        self.write_reg(Reg::R6, val);
         val = self.pop();
-        self.write_reg(Reg::R5 as u8, val);
+        self.write_reg(Reg::R5, val);
         val = self.pop();
-        self.write_reg(Reg::R4 as u8, val);
+        self.write_reg(Reg::R4, val);
         val = self.pop();
-        self.write_reg(Reg::R3 as u8, val);
+        self.write_reg(Reg::R3, val);
         val = self.pop();
-        self.write_reg(Reg::R2 as u8, val);
+        self.write_reg(Reg::R2, val);
         val = self.pop();
-        self.write_reg(Reg::R1 as u8, val);
+        self.write_reg(Reg::R1, val);
 
         let num_args = self.pop();
         for _ in 0..num_args {
@@ -1082,6 +1100,8 @@ fn vm_test() {
 
     pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
     vm.device.write16(pc, 0x4444);
+    
+    vm.device.write(pc, Instr::HLT) as usize;
 
     pc = subroutine_address as usize;
 
@@ -1104,4 +1124,69 @@ fn vm_test() {
 
     vm.device.write(pc, Instr::RET);
     // ============================================================================
+    
+    vm.run();
+}
+
+fn main() {
+    let mem = Mem::new(256*256);
+    let mut vm = Vm::new(mem);
+
+    let subroutine_address = 0x3000;
+    let mut pc = 0;
+    
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
+    pc += vm.device.write16(pc, 0x3333) as usize;
+    
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
+    pc += vm.device.write16(pc, 0x2222) as usize;
+    
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
+    pc += vm.device.write16(pc, 0x1111) as usize;
+    
+    pc += vm.device.write(pc, Instr::MOV_IMM_REG) as usize;
+    pc += vm.device.write16(pc, 0x1234) as usize;
+    pc += vm.device.write(pc, Reg::R1) as usize;
+    
+    pc += vm.device.write(pc, Instr::MOV_IMM_REG) as usize;
+    pc += vm.device.write16(pc, 0x5678) as usize;
+    pc += vm.device.write(pc, Reg::R4) as usize;
+    
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
+    pc += vm.device.write16(pc, 0x0000) as usize;
+    
+    pc += vm.device.write(pc, Instr::CAL_IMM) as usize;
+    pc += vm.device.write16(pc, subroutine_address) as usize;
+    
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
+    pc += vm.device.write16(pc, 0x4444) as usize;
+    
+    vm.device.write(pc, Instr::HLT) as usize;
+    
+    pc = subroutine_address as usize;
+
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
+    pc += vm.device.write16(pc, 0x0102) as usize;
+    
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
+    pc += vm.device.write16(pc, 0x0304) as usize;
+    
+    pc += vm.device.write(pc, Instr::PSH_IMM) as usize;
+    pc += vm.device.write16(pc, 0x0506) as usize;
+    
+    pc += vm.device.write(pc, Instr::MOV_IMM_REG) as usize;
+    pc += vm.device.write16(pc, 0x0708) as usize;
+    pc += vm.device.write(pc, Reg::R1) as usize;
+
+    pc += vm.device.write(pc, Instr::MOV_IMM_REG) as usize;
+    pc += vm.device.write16(pc, 0x090A) as usize;
+    pc += vm.device.write(pc, Reg::R8) as usize;
+
+    vm.device.write(pc, Instr::RET);
+    
+    vm.run();
+    
+    vm.print_regs();
+    // vm.device.print(vm.pc, "PC", 32);
+    vm.device.print(vm.device.size() - 42, "STACK", 41);
 }
