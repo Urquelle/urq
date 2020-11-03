@@ -412,23 +412,6 @@ enum Reg {
     Unknown,
 }
 
-impl From<u8> for Reg {
-    fn from(input: u8) -> Self {
-        match input {
-            0x0 => Reg::R1,
-            0x1 => Reg::R2,
-            0x2 => Reg::R3,
-            0x3 => Reg::R4,
-            0x4 => Reg::R5,
-            0x5 => Reg::R6,
-            0x6 => Reg::R7,
-            0x7 => Reg::R8,
-            0x8 => Reg::ACC,
-            _   => Reg::Unknown,
-        }
-    }
-}
-
 struct Vm<T>
 where
     T: Device
