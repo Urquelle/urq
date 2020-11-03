@@ -1,3 +1,9 @@
+use urq::vm::Mem;
+use urq::vm::Instr;
+use urq::vm::Reg;
+use urq::vm::Vm;
+use urq::vm::Device;
+
 #[test]
 fn mem_write() {
     let mut mem = Mem::new(1024);
