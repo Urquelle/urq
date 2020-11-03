@@ -118,8 +118,8 @@ impl Device for Mem {
     }
 
     fn print(&self, addr: usize, label: &str, n: usize) {
-        println!("\n########################## {} ####################################", label);
-        println!("MEM ADDR 0x{:04x}: ", addr);
+        println!("\n{:=^69}", format!(" {} ", label));
+        println!("{: ^69}", format!("MEM ADDR 0x{:04x}", addr));
         for i in 0..n {
             if (i % 14) == 0 && i > 0 {
                 print!("\n");
@@ -127,7 +127,6 @@ impl Device for Mem {
             
             print!("0x{:02x} ", self.mem[addr+i]);
         }
-        println!("\n###################################################################");
     }
 }
 
@@ -466,14 +465,14 @@ where
     }
     
     pub fn print_regs(&self) {
-        println!("\n########################## REGS ####################################");
-        for i in 0..9 {
+        println!("\n{:=^69}", " REGS ");
+        println!("ACC: {:#06x} ", self.regs[8]);
+        for i in 0..8 {
             print!("R{}: {:#06x} ", i+1, self.regs[i]);
             if i % 5 == 0 && i > 0 {
                 print!("\n");
             }
         }
-        println!("\n####################################################################");
     }
 
     pub fn step(&mut self) -> Result {
@@ -1035,3 +1034,4 @@ where
         }
     }
 }
+
