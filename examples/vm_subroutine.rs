@@ -4,7 +4,6 @@ use urq::vm::Reg;
 use urq::vm::Vm;
 use urq::vm::Device;
 
-
 fn main() {
     let mem = Mem::new(256*256);
     let mut vm = Vm::new(mem);
