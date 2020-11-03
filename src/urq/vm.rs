@@ -118,9 +118,13 @@ impl Device for Mem {
     }
 
     fn print(&self, addr: usize, label: &str, n: usize) {
-        println!("########################## {} ####################################", label);
-        print!("MEM 0x{:04x}: ", addr);
+        println!("\n########################## {} ####################################", label);
+        println!("MEM ADDR 0x{:04x}: ", addr);
         for i in 0..n {
+            if (i % 14) == 0 && i > 0 {
+                print!("\n");
+            }
+            
             print!("0x{:02x} ", self.mem[addr+i]);
         }
         println!("\n###################################################################");
@@ -158,7 +162,7 @@ where
                 },
 
                 None => {
-                    return Err(String::from("bla"));
+                    return Err(String::from("Kein passendes Ausgabegerät gefunden"));
                 }
             }
         }
@@ -462,9 +466,12 @@ where
     }
     
     pub fn print_regs(&self) {
-        println!("########################## REGS ####################################");
+        println!("\n########################## REGS ####################################");
         for i in 0..9 {
             print!("R{}: {:#06x} ", i+1, self.regs[i]);
+            if i % 5 == 0 && i > 0 {
+                print!("\n");
+            }
         }
         println!("\n####################################################################");
     }
